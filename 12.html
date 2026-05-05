@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قاموسي الذكي PRO+</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  text-align: center;
+  margin: 0;
+}
+
+.dark { background: #121212; color: white; }
+
+.container {
+  background: white;
+  width: 90%;
+  max-width: 500px;
+  margin: 20px auto;
+  padding: 15px;
+  border-radius: 20px;
+}
+
+.dark .container { background: #1e1e1e; }
+
+input {
+  width: 95%;
+  padding: 12px;
+  margin: 5px 0;
+  border-radius: 10px;
+}
+
+button {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  color: white;
+}
+
+.save {background: green;}
+.quiz {background: orange;}
+.speak {background: purple;}
+.delete {background: red;}
+.translate {background: #009688;}
+.show {background: #007bff;}
+.mic {background: #e91e63;}
+
+li {
+  background: #eee;
+  margin: 5px 0;
+  padding: 10px;
+  border-radius: 10px;
+  display:flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.dark li { background: #333; }
+
+@media (max-width:600px){
+  button{width:100%;}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>🚀 قاموسي الذكي PRO+</h2>
+
+  <p>⭐ نقاطك: <span id="points">0</span> | 🧠 المستوى: <span id="level">1</span></p>
+
+  <input id="word" placeholder="الكلمة">
+  <input id="meaning" placeholder="الترجمة (اختياري)">
+  <input id="search" placeholder="بحث..." onkeyup="searchWords()">
+
+  <div>
+    <button class="save" onclick="saveWord()">حفظ</button>
+    <button class="translate" onclick="translateNow()">🌐 ترجمة</button>
+    <button class="show" onclick="showWords()">📋 عرض</button>
+    <button class="quiz" onclick="startQuiz()">اختبار</button>
+    <button onclick="toggleDark()">🌙</button>
+  </div>
+
+  <ul id="list"></ul>
+  <div id="quizBox"></div>
+</div>
+
+<script>
+// عناصر
+const word = document.getElementById("word");
+const meaning = document.getElementById("meaning");
+const search = document.getElementById("search");
+const list = document.getElementById("list");
+const quizBox = document.getElementById("quizBox");
+const pointsEl = document.getElementById("points");
+const levelEl = document.getElementById("level");
+
+// نقاط
+let points = Number(localStorage.getItem("points") || 0);
+
+function updateStats(){
+  pointsEl.innerText = points;
+  levelEl.innerText = Math.floor(points/50)+1;
+}
+
+function addPoints(p){
+  points += p;
+  localStorage.setItem("points", points);
+  updateStats();
+}
+
+// بيانات
+function getWords(){
+  return JSON.parse(localStorage.getItem("words") || "[]");
+}
+
+function saveWords(words){
+  localStorage.setItem("words", JSON.stringify(words));
+}
+
+// ترجمة
+async function translate(text){
+  try{
+    let res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`);
+    let data = await res.json();
+    return data.responseData.translatedText;
+  }catch{return "";}
+}
+
+async function translateNow(){
+  if(!word.value) return;
+  meaning.value="⏳...";
+  let r = await translate(word.value);
+  meaning.value = r || "❌";
+}
+
+// حفظ
+async function saveWord(){
+  if(!word.value) return;
+
+  let m = meaning.value || await translate(word.value);
+
+  let words = getWords();
+  words.push({id: Date.now(), word: word.value, meaning: m});
+
+  saveWords(words);
+  addPoints(5);
+
+  word.value="";
+  meaning.value="";
+  showWords();
+}
+
+// عرض
+function showWords(filtered=null){
+  let words = filtered || getWords();
+  list.innerHTML="";
+
+  words.forEach(w=>{
+    list.innerHTML+=`
+    <li>
+      <div><b>${w.word}</b> - ${w.meaning}</div>
+      <div>
+        <button class="speak" onclick="speak('${w.word}')">🔊</button>
+        <button class="mic" onclick="voiceTest('${w.word}')">🎤</button>
+        <button class="delete" onclick="deleteWord(${w.id})">🗑</button>
+      </div>
+    </li>`;
+  });
+}
+
+// حذف
+function deleteWord(id){
+  if(confirm("حذف الكلمة؟")){
+    saveWords(getWords().filter(w=>w.id!==id));
+    showWords();
+  }
+}
+
+// بحث
+function searchWords(){
+  let q = search.value.toLowerCase();
+  showWords(getWords().filter(w =>
+    w.word.toLowerCase().includes(q) ||
+    w.meaning.toLowerCase().includes(q)
+  ));
+}
+
+// 🔊 صوت أنثى
+speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+
+function speak(text){
+  let speech = new SpeechSynthesisUtterance(text);
+
+  speech.lang = /[ء-ي]/.test(text) ? "ar-SA" : "en-US";
+
+  let voices = speechSynthesis.getVoices();
+
+  let female = voices.find(v =>
+    v.name.toLowerCase().includes("zira") ||
+    v.name.toLowerCase().includes("female") ||
+    v.name.toLowerCase().includes("google")
+  );
+
+  if(female){
+    speech.voice = female;
+  }
+
+  speech.pitch = 1.2;
+  speech.rate = 0.9;
+
+  speechSynthesis.speak(speech);
+}
+
+// 🎤 اختبار نطق
+function voiceTest(correct){
+  if(!('webkitSpeechRecognition' in window)){
+    alert("المتصفح لا يدعم المايك");
+    return;
+  }
+
+  let rec = new webkitSpeechRecognition();
+  rec.lang = "en-US";
+  rec.start();
+
+  quizBox.innerHTML = "🎤 تكلم الآن...";
+
+  rec.onresult = function(e){
+    let said = e.results[0][0].transcript.toLowerCase();
+
+    if(said.includes(correct.toLowerCase())){
+      quizBox.innerHTML = "✅ نطق صحيح";
+      addPoints(15);
+    } else {
+      quizBox.innerHTML = "❌ قلت: "+said;
+    }
+  };
+}
+
+// اختبار
+function startQuiz(){
+  let w = getWords();
+  if(!w.length) return;
+
+  let r = w[Math.floor(Math.random()*w.length)];
+
+  quizBox.innerHTML=`
+    <p>ما ترجمة: <b>${r.word}</b></p>
+    <input id="ans">
+    <button onclick="check('${r.meaning}')">تحقق</button>
+  `;
+}
+
+function check(correct){
+  let a = document.getElementById("ans").value.toLowerCase().trim();
+  if(a===correct.toLowerCase()){
+    quizBox.innerHTML="✅";
+    addPoints(10);
+  } else {
+    quizBox.innerHTML="❌ "+correct;
+  }
+}
+
+// الوضع الليلي
+function toggleDark(){
+  document.body.classList.toggle("dark");
+}
+
+// تشغيل
+updateStats();
+showWords();
+</script>
+
+</body>
+</html>
